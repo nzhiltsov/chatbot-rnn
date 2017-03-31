@@ -1,7 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.ops import rnn_cell
-from tensorflow.python.ops import seq2seq
-
+from tensorflow.contrib import legacy_seq2seq as seq2seq
 import numpy as np
 
 class Model():
@@ -14,23 +12,23 @@ class Model():
 
         # Set cell_fn to the type of network cell we're creating -- RNN, GRU or LSTM.
         if args.model == 'rnn':
-            cell_fn = rnn_cell.BasicRNNCell
+            cell_fn = tf.contrib.rnn.BasicRNNCell
         elif args.model == 'gru':
-            cell_fn = rnn_cell.GRUCell
+            cell_fn = tf.contrib.rnn.GRUCell
         elif args.model == 'lstm':
-            cell_fn = rnn_cell.BasicLSTMCell
+            cell_fn = tf.contrib.rnn.BasicLSTMCell
         else:
             raise Exception("model type not supported: {}".format(args.model))
 
         # Call tensorflow library tensorflow-master/tensorflow/python/ops/rnn_cell
         # to create a layer of rnn_size cells of the specified basic type (RNN/GRU/LSTM).
-        cell = cell_fn(args.rnn_size, state_is_tuple=True)
+        cell = cell_fn(args.rnn_size)
 
         # Use the same rnn_cell library to create a stack of these cells
         # of num_layers layers. Pass in a python list of these cells.
         # (The [cell] * arg.num_layers syntax literally duplicates cell multiple times in
         # a list. The syntax is such that [5, 6] * 3 would return [5, 6, 5, 6, 5, 6].)
-        self.cell = cell = rnn_cell.MultiRNNCell([cell] * args.num_layers, state_is_tuple=True)
+        self.cell = cell = tf.contrib.rnn.MultiRNNCell([cell] * args.num_layers)
 
         # Create two TF placeholder nodes of 32-bit ints (NOT floats!),
         # each of shape batch_size x seq_length. This shape matches the batches
@@ -67,7 +65,7 @@ class Model():
                 # tf.split splits that embedding lookup tensor into seq_length tensors (along dimension 1).
                 # Thus inputs is a list of seq_length different tensors,
                 # each of dimension batch_size x 1 x rnn_size.
-                inputs = tf.split(1, args.seq_length, tf.nn.embedding_lookup(embedding, self.input_data))
+                inputs = tf.split(tf.nn.embedding_lookup(embedding, self.input_data), args.seq_length, 1)
                 # Iterate through these resulting tensors and eliminate that degenerate second dimension of 1,
                 # i.e. squeeze each from batch_size x 1 x rnn_size down to batch_size x rnn_size.
                 # Thus we now have a list of seq_length tensors, each with dimension batch_size x rnn_size.
@@ -126,7 +124,7 @@ class Model():
         #   but instead concatenate the whole sequence of your outputs in time,
         #   do the projection on this batch-concatenated sequence, then split it
         #   if needed or directly feed into a softmax.
-        output = tf.reshape(tf.concat(1, outputs), [-1, args.rnn_size])
+        output = tf.reshape(tf.concat(axis=1, values=outputs), [-1, args.rnn_size])
         # Obtain logits node by applying output weights and biases to the output tensor.
         # Logits is a tensor of shape [(batch_size * seq_length) x vocab_size].
         # Recall that outputs is a 2D tensor of shape [(batch_size * seq_length) x rnn_size],
@@ -156,7 +154,7 @@ class Model():
         # implicitly represented by the target characters against the probability distrutions in logits.
         # It returns a 1D float tensor (a vector) where item i is the log-perplexity of
         # the comparison of the ith logit distribution to the ith one-hot target vector.
-        loss = seq2seq.sequence_loss_by_example([self.logits], # logits: 1-item list of 2D Tensors of shape [batch_size x vocab_size]
+        loss = seq2seq.sequence_loss([self.logits], # logits: 1-item list of 2D Tensors of shape [batch_size x vocab_size]
                 [tf.reshape(self.targets, [-1])], # targets: 1-item list of 1D batch-sized int32 Tensors of the same length as logits
                 [tf.ones([args.batch_size * args.seq_length])], # weights: 1-item list of 1D batch-sized float-Tensors of the same length as logits
                 args.vocab_size) # num_decoder_symbols: integer, number of decoder symbols (output classes)
@@ -165,7 +163,7 @@ class Model():
         # It is a single-element floating point tensor. This is what the optimizer seeks to minimize.
         self.cost = tf.reduce_sum(loss) / args.batch_size / args.seq_length
         # Create a summary for our cost.
-        tf.scalar_summary("cost", self.cost)
+        tf.summary.scalar("cost", self.cost)
         # Create a node to track the learning rate as it decays through the epochs.
         self.lr = tf.Variable(args.learning_rate, trainable=False)
         self.global_epoch_fraction = tf.Variable(0.0, trainable=False)
@@ -180,7 +178,7 @@ class Model():
         # Training op nudges the variables along the gradient, with the given learning rate, using the ADAM optimizer.
         # This is the op that a training session should be instructed to perform.
         self.train_op = optimizer.apply_gradients(zip(grads, tvars))
-        self.summary_op = tf.merge_all_summaries()
+        self.summary_op = tf.summary.merge_all()
 
     def save_variables_list(self):
         # Return a list of the trainable variables created within the rnnlm model.

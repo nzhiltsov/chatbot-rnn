@@ -11,21 +11,21 @@ from model import Model
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_dir', type=str, default='data/scotus',
+    parser.add_argument('--data_dir', type=str, default='data/spellchecker',
                        help='data directory containing input.txt')
-    parser.add_argument('--save_dir', type=str, default='models/new_save',
+    parser.add_argument('--save_dir', type=str, default='models/spellchecker',
                        help='directory for checkpointed models (load from here if one is already present)')
-    parser.add_argument('--rnn_size', type=int, default=1500,
+    parser.add_argument('--rnn_size', type=int, default=1000,
                        help='size of RNN hidden state')
-    parser.add_argument('--num_layers', type=int, default=4,
+    parser.add_argument('--num_layers', type=int, default=2,
                        help='number of layers in the RNN')
     parser.add_argument('--model', type=str, default='gru',
                        help='rnn, gru, or lstm')
-    parser.add_argument('--batch_size', type=int, default=40,
+    parser.add_argument('--batch_size', type=int, default=100,
                        help='minibatch size')
     parser.add_argument('--seq_length', type=int, default=50,
                        help='RNN sequence length')
-    parser.add_argument('--num_epochs', type=int, default=50,
+    parser.add_argument('--num_epochs', type=int, default=30,
                        help='number of epochs')
     parser.add_argument('--save_every', type=int, default=1000,
                        help='save frequency')
@@ -80,7 +80,7 @@ def train(args):
     config = tf.ConfigProto(log_device_placement=False)
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        tf.initialize_all_variables().run()
+        tf.global_variables_initializer().run()
         saver = tf.train.Saver(model.save_variables_list())
         if (load_model):
             print("Loading saved parameters")
@@ -95,7 +95,7 @@ def train(args):
                 - int(global_epoch_fraction)) * data_loader.total_batch_count)
         epoch_range = (int(global_epoch_fraction),
                 args.num_epochs + int(global_epoch_fraction))
-        writer = tf.train.SummaryWriter(args.save_dir, graph=tf.get_default_graph())
+        writer = tf.summary.FileWriter(args.save_dir, graph=tf.get_default_graph())
         outputs = [model.cost, model.final_state, model.train_op, model.summary_op]
         is_lstm = args.model == 'lstm'
         global_step = epoch_range[0] * data_loader.total_batch_count + initial_batch_step

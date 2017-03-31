@@ -15,7 +15,7 @@ from model import Model
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--save_dir', type=str, default='models/reddit',
+    parser.add_argument('--save_dir', type=str, default='models/spellchecker',
                        help='model directory to store checkpointed models')
     parser.add_argument('-n', type=int, default=500,
                        help='number of characters to sample')
@@ -67,7 +67,8 @@ def sample_main(args):
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        tf.initialize_all_variables().run()
+        #tf.initialize_all_variables().run()
+	tf.global_variables_initializer()
         saver = tf.train.Saver(net.save_variables_list())
         # Restore the saved variables, replacing the initialized values.
         print("Restoring weights...")
